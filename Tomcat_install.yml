@@ -1,0 +1,62 @@
+---
+- name: Setup Tomcat
+  hosts: all
+  become: true
+  tasks:
+  
+  - name: Install Java on RedHat
+    yum:
+      name: java
+      state: present
+    when: ansible_facts['os_family'] == "RedHat"
+
+  - name: Install Java on Ubuntu
+    apt:
+      name: default-jdk
+      state: present
+    when: ansible_facts['os_family'] == "Debian"
+
+  - name: Verify /opt/ directory is writable
+    file:
+      path: /opt/
+      state: directory
+      mode: '0755'
+    register: opt_dir
+
+  - name: Fail if /opt/ is not writable
+    fail:
+      msg: "/opt/ directory is not writable!"
+    when: opt_dir.mode != '0755'
+
+  - name: Download Tomcat package
+    get_url:
+      url: https://downloads.apache.org/tomcat/tomcat-10/v10.1.30/bin/apache-tomcat-10.1.30.tar.gz
+      dest: /opt/apache-tomcat-10.1.30.tar.gz
+      mode: '0755'
+    register: download_result
+    retries: 3
+    delay: 5
+    until: download_result is success
+
+  - name: Verify if Tomcat package was downloaded
+    stat:
+      path: /opt/apache-tomcat-10.1.30.tar.gz
+    register: tomcat_downloaded
+
+  - name: Fail if Tomcat package was not downloaded
+    fail:
+      msg: "Tomcat package was not downloaded"
+    when: not tomcat_downloaded.stat.exists
+
+  - name: Extract Tomcat
+    unarchive:
+      src: /opt/apache-tomcat-10.1.30.tar.gz
+      dest: /opt/
+      remote_src: yes
+    when: tomcat_downloaded.stat.exists
+
+  - name: Add execution permission on startup.sh file
+    file:
+      path: /opt/apache-tomcat-10.1.30/bin/startup.sh
+      mode: '0755'
+
